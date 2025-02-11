@@ -38,7 +38,8 @@ func main() {
 	authRoutes.HandleFunc("/user-posts", handlers.GetUserPostsHandler).Methods("GET")
 	authRoutes.HandleFunc("/comments", handlers.CreateCommentHandler).Methods("POST")
 	authRoutes.HandleFunc("/posts", handlers.DeletePostHandler).Methods("DELETE")
-
+	authRoutes.HandleFunc("/likes", handlers.ToggleLikeHandler).Methods("POST")
+	authRoutes.HandleFunc("/likes/count", handlers.GetLikeCountHandler).Methods("GET")
 	// WebSocket Chat
 	r.HandleFunc("/ws/chat", func(w http.ResponseWriter, r *http.Request) {
 		username := r.URL.Query().Get("username")
