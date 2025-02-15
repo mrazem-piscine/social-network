@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebSocketConn wraps a WebSocket connection with a mutex
+// WebSocketConn wraps a WebSocket connection
 type WebSocketConn struct {
 	Conn  *websocket.Conn
 	Mutex sync.Mutex
@@ -33,35 +33,38 @@ func NewWebSocketNotificationManager() *WebSocketNotificationManager {
 	}
 }
 
-// SendNotification sends a notification to an online user via WebSocket
+// SendNotification sends a notification to an online user
 func (wm *WebSocketNotificationManager) SendNotification(notification Notification) {
 	wm.Mutex.Lock()
 	clientConn, exists := wm.Clients[notification.UserID]
-	wm.Mutex.Unlock() // ✅ Unlock immediately after checking existence
+	wm.Mutex.Unlock()
 
-	if !exists {
-		log.Printf("User %d is offline. Notification stored for later.", notification.UserID)
-		return
+	if exists {
+		clientConn.Mutex.Lock()
+		err := clientConn.Conn.WriteJSON(notification)
+		clientConn.Mutex.Unlock()
+
+		if err != nil {
+			log.Printf("❌ Error sending notification to user %d: %v", notification.UserID, err)
+			wm.RemoveClient(notification.UserID) // Remove if connection fails
+		}
+	} else {
+		log.Printf("⚠️ User %d is offline. Notification stored for later.", notification.UserID)
 	}
+}
 
-	clientConn.Mutex.Lock()
-	defer clientConn.Mutex.Unlock() // ✅ Ensure mutex is released
-
-	// ✅ Ensure connection is still open before writing
-	if err := clientConn.Conn.WriteJSON(notification); err != nil {
-		log.Printf("Error sending notification to user %d: %v", notification.UserID, err)
-		wm.RemoveClient(notification.UserID) // ✅ Remove disconnected clients
-	}
+// RegisterClient registers a WebSocket client for notifications
+func (wm *WebSocketNotificationManager) RegisterClient(userID int, conn *websocket.Conn) {
+	wm.Mutex.Lock()
+	wm.Clients[userID] = &WebSocketConn{Conn: conn}
+	wm.Mutex.Unlock()
+	log.Printf("✅ User %d connected for real-time notifications.", userID)
 }
 
 // RemoveClient removes a disconnected WebSocket client
 func (wm *WebSocketNotificationManager) RemoveClient(userID int) {
 	wm.Mutex.Lock()
-	defer wm.Mutex.Unlock()
-
-	if clientConn, exists := wm.Clients[userID]; exists {
-		clientConn.Conn.Close()
-		delete(wm.Clients, userID)
-		log.Printf("Removed disconnected client for user %d", userID)
-	}
+	delete(wm.Clients, userID)
+	wm.Mutex.Unlock()
+	log.Printf("⚠️ User %d disconnected from notifications.", userID)
 }

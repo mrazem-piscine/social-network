@@ -16,27 +16,25 @@ func NewNotificationRepository(db *sql.DB) *NotificationRepository {
 	return &NotificationRepository{DB: db}
 }
 
-// CreateNotification inserts a notification into the database
-func (repo *NotificationRepository) CreateNotification(userID int, notifType, message string) error {
+// CreateNotification inserts a new notification into the database
+func (repo *NotificationRepository) CreateNotification(notification *models.Notification) error {
 	_, err := repo.DB.Exec(`
 		INSERT INTO notifications (user_id, type, message) 
-		VALUES (?, ?, ?)`, userID, notifType, message)
+		VALUES (?, ?, ?)`,
+		notification.UserID, notification.Type, notification.Message)
 
 	if err != nil {
-		log.Println("Error inserting notification:", err)
+		log.Println("Error creating notification:", err)
+		return err
 	}
-	return err
+	return nil
 }
 
-// GetNotifications retrieves unread notifications for a user
+// GetNotifications fetches notifications for a user
 func (repo *NotificationRepository) GetNotifications(userID int) ([]models.Notification, error) {
-	rows, err := repo.DB.Query(`
-		SELECT id, type, message, is_read, created_at 
-		FROM notifications 
-		WHERE user_id = ? 
-		ORDER BY created_at DESC`, userID)
+	rows, err := repo.DB.Query("SELECT id, user_id, type, message, created_at FROM notifications WHERE user_id = ?", userID)
 	if err != nil {
-		log.Println("Error fetching notifications:", err)
+		log.Println("Error retrieving notifications:", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -44,12 +42,41 @@ func (repo *NotificationRepository) GetNotifications(userID int) ([]models.Notif
 	var notifications []models.Notification
 	for rows.Next() {
 		var notif models.Notification
-		err := rows.Scan(&notif.ID, &notif.Type, &notif.Message, &notif.IsRead, &notif.CreatedAt)
-		if err != nil {
-			log.Println("Error scanning notification:", err)
+		if err := rows.Scan(&notif.ID, &notif.UserID, &notif.Type, &notif.Message, &notif.CreatedAt); err != nil {
 			return nil, err
 		}
 		notifications = append(notifications, notif)
 	}
+
 	return notifications, nil
+}
+// GetUnreadNotifications fetches unread notifications for a user
+func (repo *NotificationRepository) GetUnreadNotifications(userID int) ([]models.Notification, error) {
+	rows, err := repo.DB.Query("SELECT id, user_id, type, message, created_at FROM notifications WHERE user_id = ? AND is_read = 0", userID)
+	if err != nil {
+		log.Println("Error retrieving unread notifications:", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notifications []models.Notification
+	for rows.Next() {
+		var notif models.Notification
+		if err := rows.Scan(&notif.ID, &notif.UserID, &notif.Type, &notif.Message, &notif.CreatedAt); err != nil {
+			return nil, err
+		}
+		notifications = append(notifications, notif)
+	}
+
+	return notifications, nil
+}
+
+// MarkNotificationsAsRead marks all notifications as read for a user
+func (repo *NotificationRepository) MarkNotificationsAsRead(userID int) error {
+	_, err := repo.DB.Exec("UPDATE notifications SET is_read = 1 WHERE user_id = ?", userID)
+	if err != nil {
+		log.Println("Error marking notifications as read:", err)
+		return err
+	}
+	return nil
 }

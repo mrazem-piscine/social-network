@@ -2,9 +2,9 @@ package repositories
 
 import (
 	"database/sql"
-	"errors"
 	"log"
 	"social-network/internal/models"
+	"time"
 )
 
 // PostRepository handles post-related database operations
@@ -15,6 +15,15 @@ type PostRepository struct {
 // NewPostRepository creates a new instance of PostRepository
 func NewPostRepository(db *sql.DB) *PostRepository {
 	return &PostRepository{DB: db}
+}
+func (repo *PostRepository) CreatePost(post *models.Post) error {
+	_, err := repo.DB.Exec(`
+    INSERT INTO posts (user_id, content, image, privacy, created_at)
+    VALUES (?, ?, ?, ?, ?)`,
+		post.UserID, post.Content, post.Image, post.Privacy, time.Now(),
+	)
+
+	return err
 }
 
 // GetUserPosts retrieves posts based on privacy settings
@@ -51,19 +60,17 @@ func (repo *PostRepository) GetUserPosts(userID int, viewerID int) ([]models.Pos
 
 // DeletePost deletes a post (only the creator can delete)
 func (repo *PostRepository) DeletePost(postID, userID int) error {
-	result, err := repo.DB.Exec(`
-		DELETE FROM posts 
-		WHERE id = ? AND user_id = ?`, postID, userID)
+	_, err := repo.DB.Exec(`DELETE FROM posts WHERE id = ? AND user_id = ?`, postID, userID)
+	return err
+}
 
-	if err != nil {
-		log.Println("Error deleting post:", err)
-		return err
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return errors.New("post not found or unauthorized")
-	}
-
-	return nil
+// EditPost updates a post's content
+func (repo *PostRepository) EditPost(postID, userID int, content string, image *string, privacy string) error {
+	_, err := repo.DB.Exec(`
+        UPDATE posts
+        SET content = ?, image = ?, privacy = ?
+        WHERE id = ? AND user_id = ?`,
+		content, image, privacy, postID, userID,
+	)
+	return err
 }

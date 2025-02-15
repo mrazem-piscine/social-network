@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"social-network/internal/config"
 	"social-network/internal/middlewares"
@@ -11,7 +12,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// RegisterUser handles user registration
 func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
@@ -20,29 +20,29 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	var user models.User
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input format.", http.StatusBadRequest)
+		log.Println("❌ Error decoding request body:", err)
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	if user.Nickname == "" || user.Email == "" || user.Password == "" {
-		http.Error(w, "Nickname, email, and password are required.", http.StatusBadRequest)
-		return
-	}
-
-	// Hash password
+	// Hash password before storing
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Error hashing password.", http.StatusInternalServerError)
+		log.Println("❌ Error hashing password:", err)
+		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
 		return
 	}
+	user.Password = string(hashedPassword)
 
-	// Get repository and store user
+	// Get database connection
 	db := config.GetDB()
 	userRepo := repositories.NewUserRepository(db)
 
-	err = userRepo.CreateUser(&user, hashedPassword)
+	// Insert user into database
+	err = userRepo.CreateUser(&user)
 	if err != nil {
-		http.Error(w, "Registration failed.", http.StatusInternalServerError)
+		log.Println("❌ Error inserting user into database:", err)
+		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 

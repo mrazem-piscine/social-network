@@ -27,19 +27,59 @@ func main() {
 
 	r := mux.NewRouter()
 
-	// Public Routes
+	// Public Routes (No Authentication Required)
 	r.HandleFunc("/register", handlers.RegisterUser).Methods("POST")
 	r.HandleFunc("/login", handlers.LoginUser).Methods("POST")
 	r.HandleFunc("/logout", handlers.LogoutUser).Methods("POST")
 
+	// Serve uploaded images
+	r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
+	// WebSocket Routes
+	r.HandleFunc("/ws/notifications", handlers.WebSocketNotificationHandler)
+	r.HandleFunc("/ws/chat", handlers.WebSocketChatHandler)
+	r.HandleFunc("/ws/group-chat", handlers.WebSocketGroupChatHandler)
+
 	// Protected Routes (Require Authentication)
 	authRoutes := r.PathPrefix("/api").Subrouter()
 	authRoutes.Use(middlewares.Authenticate)
-	authRoutes.HandleFunc("/user-posts", handlers.GetUserPostsHandler).Methods("GET")
+
+	// ✅ Post & Comment Routes
 	authRoutes.HandleFunc("/comments", handlers.CreateCommentHandler).Methods("POST")
+	authRoutes.HandleFunc("/comments", handlers.GetCommentsForPostHandler).Methods("GET")
+	authRoutes.HandleFunc("/comments/edit", handlers.EditCommentHandler).Methods("PUT")
+	authRoutes.HandleFunc("/comments", handlers.DeleteCommentHandler).Methods("DELETE")
+
+	authRoutes.HandleFunc("/user-posts", handlers.GetUserPostsHandler).Methods("GET")
+	authRoutes.HandleFunc("/posts", handlers.CreatePostHandler).Methods("POST")
+	authRoutes.HandleFunc("/posts/edit", handlers.EditPostHandler).Methods("PUT")
 	authRoutes.HandleFunc("/posts", handlers.DeletePostHandler).Methods("DELETE")
+	// Serve uploaded images
+
+	// ✅ Like System
 	authRoutes.HandleFunc("/likes", handlers.ToggleLikeHandler).Methods("POST")
 	authRoutes.HandleFunc("/likes/count", handlers.GetLikeCountHandler).Methods("GET")
+
+	// ✅ Group Management
+	authRoutes.HandleFunc("/groups", handlers.CreateGroupHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/members", handlers.GetGroupMembersHandler).Methods("GET")
+	authRoutes.HandleFunc("/groups/posts", handlers.CreateGroupPostHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/events", handlers.CreateGroupEventHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/events/rsvp", handlers.RSVPToEventHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/events/rsvp/count", handlers.GetRSVPCountHandler).Methods("GET")
+	
+	// ✅ Group Membership
+	authRoutes.HandleFunc("/groups/join", handlers.RequestToJoinGroupHandler).Methods("POST") // ✅ Use only one join method
+	authRoutes.HandleFunc("/groups/approve", handlers.ApproveMembershipHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/reject", handlers.RejectMembershipHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/leave", handlers.LeaveGroupHandler).Methods("POST")
+
+	// ✅ Notifications
+	authRoutes.HandleFunc("/notifications", handlers.GetNotificationsHandler).Methods("GET")
+
+	// ✅ Chat System
+	authRoutes.HandleFunc("/chat/send", handlers.SendMessageHandler).Methods("POST")
+	authRoutes.HandleFunc("/chat/history", handlers.GetChatHistoryHandler).Methods("GET")
+
 	// WebSocket Chat
 	r.HandleFunc("/ws/chat", func(w http.ResponseWriter, r *http.Request) {
 		username := r.URL.Query().Get("username")

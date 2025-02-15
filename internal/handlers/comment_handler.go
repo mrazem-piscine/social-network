@@ -8,16 +8,10 @@ import (
 	"social-network/internal/middlewares"
 	"social-network/internal/models"
 	"social-network/internal/repositories"
+	"strconv"
 )
 
-// CreateCommentHandler handles adding a comment to a post
 func CreateCommentHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// ✅ Get authenticated UserID from session
 	userID := middlewares.GetUserIDFromSession(r)
 	if userID == 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -30,27 +24,104 @@ func CreateCommentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ Ensure required fields are present
-	if comment.Content == "" {
-		http.Error(w, "Comment content cannot be empty", http.StatusBadRequest)
+	if comment.Content == "" || comment.PostID == 0 {
+		http.Error(w, "Comment content and post ID are required", http.StatusBadRequest)
 		return
 	}
+
+	comment.UserID = userID
 
 	db := config.GetDB()
 	commentRepo := repositories.NewCommentRepository(db)
 
-	// ✅ Set UserID from session (prevents user spoofing)
-	comment.UserID = userID
-
-	// ✅ Save comment
-	err := commentRepo.CreateComment(&comment)
+	err := commentRepo.AddComment(&comment)
 	if err != nil {
-		log.Println("Failed to add comment:", err)
+		log.Println("Error adding comment:", err)
 		http.Error(w, "Failed to add comment", http.StatusInternalServerError)
 		return
 	}
 
-	// ✅ Return JSON response
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Comment added successfully"})
+}
+func EditCommentHandler(w http.ResponseWriter, r *http.Request) {
+    userID := middlewares.GetUserIDFromSession(r)
+    if userID == 0 {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    commentID, err := strconv.Atoi(r.URL.Query().Get("comment_id"))
+    if err != nil || commentID == 0 {
+        http.Error(w, "Invalid comment ID", http.StatusBadRequest)
+        return
+    }
+
+    var requestBody struct {
+        Content string `json:"content"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil || requestBody.Content == "" {
+        http.Error(w, "Invalid input", http.StatusBadRequest)
+        return
+    }
+
+    db := config.GetDB()
+    repo := repositories.NewCommentRepository(db)
+
+    err = repo.EditComment(commentID, userID, requestBody.Content)
+    if err != nil {
+        log.Println("Error editing comment:", err)
+        http.Error(w, "Failed to edit comment", http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Comment updated successfully"})
+}
+
+func GetCommentsForPostHandler(w http.ResponseWriter, r *http.Request) {
+    postID, err := strconv.Atoi(r.URL.Query().Get("post_id"))
+    if err != nil || postID == 0 {
+        http.Error(w, "Invalid post ID", http.StatusBadRequest)
+        return
+    }
+
+    db := config.GetDB()
+    repo := repositories.NewCommentRepository(db)
+
+    comments, err := repo.GetCommentsForPost(postID)
+    if err != nil {
+        log.Println("Error retrieving comments:", err)
+        http.Error(w, "Failed to retrieve comments", http.StatusInternalServerError)
+        return
+    }
+
+    json.NewEncoder(w).Encode(comments)
+}
+
+func DeleteCommentHandler(w http.ResponseWriter, r *http.Request) {
+    userID := middlewares.GetUserIDFromSession(r)
+    if userID == 0 {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    commentID, err := strconv.Atoi(r.URL.Query().Get("comment_id"))
+    if err != nil || commentID == 0 {
+        http.Error(w, "Invalid comment ID", http.StatusBadRequest)
+        return
+    }
+
+    db := config.GetDB()
+    repo := repositories.NewCommentRepository(db)
+
+    err = repo.DeleteComment(commentID, userID)
+    if err != nil {
+        log.Println("Error deleting comment:", err)
+        http.Error(w, "Failed to delete comment", http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Comment deleted successfully"})
 }

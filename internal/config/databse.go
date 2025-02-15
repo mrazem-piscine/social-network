@@ -2,45 +2,39 @@ package config
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
-	"sync"
+	"path/filepath"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var (
-	db   *sql.DB
-	once sync.Once
-)
+var db *sql.DB
 
-// GetDB returns the database connection
+// GetDB initializes and returns the database connection
 func GetDB() *sql.DB {
-	once.Do(func() {
-		// Ensure `data/` directory exists
-		if _, err := os.Stat("./data"); os.IsNotExist(err) {
-			os.Mkdir("./data", os.ModePerm)
-		}
+	if db != nil {
+		return db
+	}
 
-		var err error
-		// ✅ Use a fresh database file
-		db, err = sql.Open("sqlite3", "./data/forum_new.db?_busy_timeout=30000&_journal_mode=WAL&_locking_mode=NORMAL")
-		if err != nil {
-			log.Fatal("Failed to open database:", err)
-		}
+	// ✅ Ensure `data/` directory exists
+	if _, err := os.Stat("./data"); os.IsNotExist(err) {
+		os.Mkdir("./data", os.ModePerm)
+	}
 
-		// ✅ Enable WAL mode explicitly
-		_, err = db.Exec("PRAGMA journal_mode = WAL;")
-		if err != nil {
-			log.Fatal("Failed to enable WAL mode:", err)
-		}
+	var err error
+	db, err = sql.Open("sqlite3", "./data/forum.db?_busy_timeout=10000&_journal_mode=WAL&_locking_mode=NORMAL")
+	if err != nil {
+		log.Fatal("❌ Failed to open database:", err)
+	}
 
-		// ✅ Increase busy timeout
-		_, err = db.Exec("PRAGMA busy_timeout = 30000;")
-		if err != nil {
-			log.Fatal("Failed to set busy timeout:", err)
-		}
-	})
+	// ✅ Apply migrations before returning DB
+	if err := applyMigrations(); err != nil {
+		log.Fatal("❌ Failed to apply migrations:", err)
+	}
+
 	return db
 }
 
@@ -48,7 +42,36 @@ func GetDB() *sql.DB {
 func CloseDB() {
 	if db != nil {
 		db.Close()
-		log.Println("Database connection closed.")
 	}
 }
-\
+
+// applyMigrations runs all `.up.sql` files inside `migrations/`
+func applyMigrations() error {
+	migrationDir := "migrations"
+	absPath, err := filepath.Abs(migrationDir)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute migration path: %v", err)
+	}
+
+	files, err := os.ReadDir(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to read migrations directory: %v", err)
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".up.sql") {
+			migrationPath := filepath.Join(absPath, file.Name())
+			migrationSQL, err := os.ReadFile(migrationPath)
+			if err != nil {
+				return fmt.Errorf("failed to read migration %s: %v", file.Name(), err)
+			}
+
+			_, err = db.Exec(string(migrationSQL))
+			if err != nil {
+				return fmt.Errorf("failed to execute migration %s: %v", file.Name(), err)
+			}
+			fmt.Println("🔹 Applied migration:", file.Name())
+		}
+	}
+	return nil
+}
