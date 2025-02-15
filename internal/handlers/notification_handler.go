@@ -8,31 +8,30 @@ import (
 	"social-network/internal/middlewares"
 	"social-network/internal/repositories"
 	ws "social-network/internal/websocket" // ✅ Assign alias to avoid conflicts
+	"strconv"
 
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-var notificationManager = ws.NewWebSocketNotificationManager() // ✅ Use alias `ws`
-
 // WebSocketNotificationHandler handles real-time notifications
 func WebSocketNotificationHandler(w http.ResponseWriter, r *http.Request) {
-	userID := middlewares.GetUserIDFromSession(r)
-	if userID == 0 {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
+	userIDStr := r.URL.Query().Get("user_id")
+	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
-		http.Error(w, "Failed to upgrade WebSocket", http.StatusInternalServerError)
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 
-	// Register user for real-time notifications
-	notificationManager.RegisterClient(userID, conn)
+	conn, err := websocket.Upgrade(w, r, nil, 1024, 1024) // ✅ Fix: Added missing buffer sizes
+	if err != nil {
+		log.Println("❌ Failed to upgrade WebSocket:", err)
+		http.Error(w, "WebSocket upgrade failed", http.StatusInternalServerError)
+		return
+	}
 
-	log.Printf("✅ User %d connected for real-time notifications", userID)
+	// Store connection in WebSocket manager
+	ws.NotificationManager.RegisterClient(userID, conn)
+	log.Printf("✅ WebSocket connected for User %d", userID)
 }
 
 // GetNotificationsHandler fetches notifications for a user

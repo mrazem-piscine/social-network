@@ -26,6 +26,11 @@ type Notification struct {
 	Message string `json:"message"`
 }
 
+// ✅ Global Notification Manager (Pointer)
+var NotificationManager = &WebSocketNotificationManager{
+	Clients: make(map[int]*WebSocketConn),
+}
+
 // NewWebSocketNotificationManager initializes a new notification manager
 func NewWebSocketNotificationManager() *WebSocketNotificationManager {
 	return &WebSocketNotificationManager{
@@ -33,38 +38,58 @@ func NewWebSocketNotificationManager() *WebSocketNotificationManager {
 	}
 }
 
-// SendNotification sends a notification to an online user
-func (wm *WebSocketNotificationManager) SendNotification(notification Notification) {
-	wm.Mutex.Lock()
-	clientConn, exists := wm.Clients[notification.UserID]
-	wm.Mutex.Unlock()
+// ✅ Send Notification to a User (Only if Online)
+func SendNotification(userID int, message string) {
+	notification := Notification{
+		Type:    "event_rsvp",
+		UserID:  userID,
+		Message: message,
+	}
 
-	if exists {
-		clientConn.Mutex.Lock()
-		err := clientConn.Conn.WriteJSON(notification)
-		clientConn.Mutex.Unlock()
+	NotificationManager.Mutex.Lock()
+	client, exists := NotificationManager.Clients[userID]
+	NotificationManager.Mutex.Unlock()
 
+	if exists && client != nil {
+		client.Mutex.Lock()
+		defer client.Mutex.Unlock()
+
+		err := client.Conn.WriteJSON(notification)
 		if err != nil {
-			log.Printf("❌ Error sending notification to user %d: %v", notification.UserID, err)
-			wm.RemoveClient(notification.UserID) // Remove if connection fails
+			log.Printf("❌ Error sending WebSocket notification to User %d: %v", userID, err)
+			NotificationManager.RemoveClient(userID)
+		} else {
+			log.Printf("✅ Sent WebSocket notification to User %d: %s", userID, message)
 		}
 	} else {
-		log.Printf("⚠️ User %d is offline. Notification stored for later.", notification.UserID)
+		log.Printf("📌 User %d is offline. Notification stored.", userID)
 	}
 }
 
-// RegisterClient registers a WebSocket client for notifications
+// ✅ Register a WebSocket Client for Notifications
 func (wm *WebSocketNotificationManager) RegisterClient(userID int, conn *websocket.Conn) {
 	wm.Mutex.Lock()
+	defer wm.Mutex.Unlock()
+
+	// ✅ Close previous connection if user reconnects
+	if oldClient, exists := wm.Clients[userID]; exists {
+		log.Printf("⚠️ Closing old connection for User %d.", userID)
+		oldClient.Conn.Close()
+		delete(wm.Clients, userID)
+	}
+
 	wm.Clients[userID] = &WebSocketConn{Conn: conn}
-	wm.Mutex.Unlock()
 	log.Printf("✅ User %d connected for real-time notifications.", userID)
 }
 
-// RemoveClient removes a disconnected WebSocket client
+// ✅ Remove a Disconnected WebSocket Client
 func (wm *WebSocketNotificationManager) RemoveClient(userID int) {
 	wm.Mutex.Lock()
-	delete(wm.Clients, userID)
-	wm.Mutex.Unlock()
-	log.Printf("⚠️ User %d disconnected from notifications.", userID)
+	defer wm.Mutex.Unlock()
+
+	if client, exists := wm.Clients[userID]; exists {
+		client.Conn.Close()
+		delete(wm.Clients, userID)
+		log.Printf("⚠️ User %d disconnected from notifications.", userID)
+	}
 }

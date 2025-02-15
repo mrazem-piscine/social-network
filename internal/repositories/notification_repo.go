@@ -17,17 +17,15 @@ func NewNotificationRepository(db *sql.DB) *NotificationRepository {
 }
 
 // CreateNotification inserts a new notification into the database
-func (repo *NotificationRepository) CreateNotification(notification *models.Notification) error {
+func (repo *NotificationRepository) CreateNotification(userID int, message string) error {
 	_, err := repo.DB.Exec(`
-		INSERT INTO notifications (user_id, type, message) 
-		VALUES (?, ?, ?)`,
-		notification.UserID, notification.Type, notification.Message)
+        INSERT INTO notifications (user_id, message, is_read, created_at) 
+        VALUES (?, ?, 0, CURRENT_TIMESTAMP)`, userID, message)
 
 	if err != nil {
-		log.Println("Error creating notification:", err)
-		return err
+		log.Println("❌ Error inserting notification:", err)
 	}
-	return nil
+	return err
 }
 
 // GetNotifications fetches notifications for a user
@@ -50,6 +48,7 @@ func (repo *NotificationRepository) GetNotifications(userID int) ([]models.Notif
 
 	return notifications, nil
 }
+
 // GetUnreadNotifications fetches unread notifications for a user
 func (repo *NotificationRepository) GetUnreadNotifications(userID int) ([]models.Notification, error) {
 	rows, err := repo.DB.Query("SELECT id, user_id, type, message, created_at FROM notifications WHERE user_id = ? AND is_read = 0", userID)

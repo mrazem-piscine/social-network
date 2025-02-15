@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+
 	"social-network/internal/config"
 	"social-network/internal/middlewares"
 	"social-network/internal/repositories"
-	"strconv"
+	"social-network/internal/websocket"
 )
 
 // RSVPToEventHandler handles user RSVPs to an event
@@ -25,23 +28,44 @@ func RSVPToEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var requestBody struct {
-		Status string `json:"status"` // "going" or "not going"
+		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil || (requestBody.Status != "going" && requestBody.Status != "not going") {
-		http.Error(w, "Invalid status", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	db := config.GetDB()
-	repo := repositories.NewEventRSVPRepository(db)
+	eventRepo := repositories.NewGroupEventRepository(db) // ✅ Correct repository
+	notifRepo := repositories.NewNotificationRepository(db)
 
-	err = repo.RSVPToEvent(eventID, userID, requestBody.Status)
+	// ✅ Store RSVP in the database
+	err = eventRepo.RSVPToEvent(eventID, userID, requestBody.Status)
 	if err != nil {
-		log.Println("Error updating RSVP:", err)
+		log.Println("❌ Error updating RSVP:", err)
 		http.Error(w, "Failed to RSVP", http.StatusInternalServerError)
 		return
 	}
 
+	// ✅ Get event details
+	event, err := eventRepo.GetEventByID(eventID)
+	if err != nil {
+		log.Println("❌ Error retrieving event:", err)
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	}
+
+	// ✅ Notify the event creator
+	message := fmt.Sprintf("User %d has RSVP'd as %s to your event: %s", userID, requestBody.Status, event.Title)
+	err = notifRepo.CreateNotification(event.CreatorID, message)
+	if err != nil {
+		log.Println("❌ Error creating notification:", err)
+	}
+
+	// ✅ Send real-time WebSocket notification
+	go websocket.SendNotification(event.CreatorID, message)
+
+	// ✅ Response
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "RSVP updated successfully"})
 }

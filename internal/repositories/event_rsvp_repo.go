@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"log"
 )
 
 // EventRSVPRepository handles event RSVP operations
@@ -21,6 +22,10 @@ func (repo *EventRSVPRepository) RSVPToEvent(eventID, userID int, status string)
         VALUES (?, ?, ?)
         ON CONFLICT(event_id, user_id) DO UPDATE SET status = excluded.status`,
 		eventID, userID, status)
+
+	if err != nil {
+		log.Println("❌ Failed to RSVP:", err)
+	}
 	return err
 }
 
