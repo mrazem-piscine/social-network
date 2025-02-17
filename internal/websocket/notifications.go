@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"log"
+	"social-network/internal/config"
+	"social-network/internal/models"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -38,12 +40,12 @@ func NewWebSocketNotificationManager() *WebSocketNotificationManager {
 	}
 }
 
-// ✅ Send Notification to a User (Only if Online)
-func SendNotification(userID int, message string) {
-	notification := Notification{
-		Type:    "event_rsvp",
+func SendNotification(userID int, notifType, message string) {
+	notification := models.Notification{
 		UserID:  userID,
+		Type:    notifType,
 		Message: message,
+		IsRead:  false,
 	}
 
 	NotificationManager.Mutex.Lock()
@@ -52,17 +54,30 @@ func SendNotification(userID int, message string) {
 
 	if exists && client != nil {
 		client.Mutex.Lock()
-		defer client.Mutex.Unlock()
-
 		err := client.Conn.WriteJSON(notification)
+		client.Mutex.Unlock()
+
 		if err != nil {
-			log.Printf("❌ Error sending WebSocket notification to User %d: %v", userID, err)
+			log.Printf("❌ Error sending WebSocket notification: %v", err)
 			NotificationManager.RemoveClient(userID)
-		} else {
-			log.Printf("✅ Sent WebSocket notification to User %d: %s", userID, message)
+			storeNotification(notification) // Store in DB if sending fails
 		}
 	} else {
+		storeNotification(notification) // Store in DB if offline
 		log.Printf("📌 User %d is offline. Notification stored.", userID)
+	}
+}
+
+// **Function to store notifications in the database**
+func storeNotification(notification models.Notification) {
+	db := config.GetDB()
+	_, err := db.Exec(`
+		INSERT INTO notifications (user_id, type, message, is_read, created_at) 
+		VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)`,
+		notification.UserID, notification.Type, notification.Message)
+
+	if err != nil {
+		log.Printf("❌ Failed to store notification: %v", err)
 	}
 }
 

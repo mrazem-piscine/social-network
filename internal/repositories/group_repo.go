@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"social-network/internal/models"
 )
 
@@ -108,20 +109,14 @@ func (repo *GroupRepository) IsUserGroupAdmin(userID, groupID int) (bool, error)
 
 // RequestToJoinGroup allows a user to request membership in a group
 func (repo *GroupRepository) RequestToJoinGroup(groupID, userID int) error {
-	// Check if the user is already a member or pending approval
-	var exists bool
-	err := repo.DB.QueryRow("SELECT EXISTS (SELECT 1 FROM group_members WHERE user_id = ? AND group_id = ?)", userID, groupID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return errors.New("user is already in the group or has a pending request")
-	}
+	log.Println("Inserting into group_members:", groupID, userID) // Debug Log
 
-	// Insert the membership request with status "pending"
-	_, err = repo.DB.Exec(`
-        INSERT INTO group_members (group_id, user_id, role, created_at) 
-        VALUES (?, ?, 'pending', CURRENT_TIMESTAMP)`,
-		groupID, userID)
+	_, err := repo.DB.Exec(`
+        INSERT INTO group_members (group_id, user_id, status) 
+        VALUES (?, ?, 'pending')`, groupID, userID)
+
+	if err != nil {
+		log.Println("❌ Failed to request to join group:", err) // Show exact error
+	}
 	return err
 }

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"social-network/internal/config"
@@ -11,6 +13,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+type SessionData struct {
+	UserID int `json:"user_id"`
+}
 
 func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -50,45 +56,54 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "User registered successfully"})
 }
 
-// LoginUser handles user login
 func LoginUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed. Use POST.", http.StatusMethodNotAllowed)
-		return
+	var credentials struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid input", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
 	db := config.GetDB()
 	userRepo := repositories.NewUserRepository(db)
 
-	storedUser, storedPassword, err := userRepo.GetUserByEmailOrNickname(user.Email)
-	if err != nil || storedUser == nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	// ✅ Retrieve user by email or nickname
+	user, hashedPassword, err := userRepo.GetUserByEmailOrNickname(credentials.Email)
+	if err != nil || user == nil {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(user.Password)) != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	// ✅ Verify password
+	if !middlewares.CheckPasswordHash(credentials.Password, hashedPassword) {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	// Set session
-	err = middlewares.SetSession(w, r, storedUser.ID, storedUser.Nickname)
-	if err != nil {
-		http.Error(w, "Session error", http.StatusInternalServerError)
-		return
-	}
+	// ✅ Encode session JSON
+	sessionData := SessionData{UserID: user.ID}
+	sessionJSON, _ := json.Marshal(sessionData)
 
-	w.Header().Set("Content-Type", "application/json")
+	// ✅ Fix the session format: `userID|Base64`
+	encodedSession := fmt.Sprintf("%d|%s", user.ID, base64.StdEncoding.EncodeToString(sessionJSON))
+
+	// ✅ Store it in cookies
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    encodedSession,
+		HttpOnly: true,
+		Path:     "/",
+	})
+
+	// ✅ Return success response
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":  "Login successful",
-		"user_id":  storedUser.ID,
-		"nickname": storedUser.Nickname,
+		"nickname": user.Nickname,
+		"user_id":  user.ID,
 	})
 }
 

@@ -101,6 +101,7 @@ func ApproveMembershipHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Membership approved"})
 }
+
 // GetGroupMembersHandler retrieves all approved members of a group
 func GetGroupMembersHandler(w http.ResponseWriter, r *http.Request) {
 	groupID, err := strconv.Atoi(r.URL.Query().Get("group_id"))
@@ -150,4 +151,6 @@ func RejectMembershipHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Membership rejected"})
+	log.Println("Attempting to join group:", userID, "Group:", groupID)
+
 }

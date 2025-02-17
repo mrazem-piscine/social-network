@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"social-network/internal/config"
 	"social-network/internal/middlewares"
-	"social-network/internal/repositories"
+	"social-network/internal/models"
 	ws "social-network/internal/websocket" // ✅ Assign alias to avoid conflicts
 	"strconv"
 
@@ -43,13 +43,31 @@ func GetNotificationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db := config.GetDB()
-	repo := repositories.NewNotificationRepository(db)
-
-	notifications, err := repo.GetNotifications(userID)
+	rows, err := db.Query(`
+		SELECT id, type, message, is_read, created_at 
+		FROM notifications WHERE user_id = ?`, userID)
 	if err != nil {
-		log.Println("Error getting notifications:", err)
-		http.Error(w, "Failed to fetch notifications", http.StatusInternalServerError)
+		log.Println("❌ Error fetching notifications:", err)
+		http.Error(w, "Failed to retrieve notifications", http.StatusInternalServerError)
 		return
+	}
+	defer rows.Close()
+
+	var notifications []models.Notification
+	for rows.Next() {
+		var notif models.Notification
+		err := rows.Scan(&notif.ID, &notif.Type, &notif.Message, &notif.IsRead, &notif.CreatedAt)
+		if err != nil {
+			log.Println("❌ Error scanning notifications:", err)
+			continue
+		}
+		notifications = append(notifications, notif)
+	}
+
+	// ✅ Mark notifications as read
+	_, err = db.Exec("UPDATE notifications SET is_read = 1 WHERE user_id = ?", userID)
+	if err != nil {
+		log.Println("❌ Error marking notifications as read:", err)
 	}
 
 	w.WriteHeader(http.StatusOK)

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"social-network/internal/config"
 	"social-network/internal/middlewares"
-	"social-network/internal/models"
 	"social-network/internal/repositories"
 	ws "social-network/internal/websocket"
 	"strconv"
@@ -39,32 +38,41 @@ func WebSocketChatHandler(w http.ResponseWriter, r *http.Request) {
 
 // SendMessageHandler allows users to send messages
 func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
-	senderID := middlewares.GetUserIDFromSession(r)
-	if senderID == 0 {
+	userID := middlewares.GetUserIDFromSession(r)
+	if userID == 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	var message models.ChatMessage
-	if err := json.NewDecoder(r.Body).Decode(&message); err != nil {
+	var requestBody struct {
+		ReceiverID int    `json:"receiver_id"`
+		Content    string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-	message.SenderID = senderID
 
-	db := config.GetDB()
-	repo := repositories.NewChatRepository(db)
-
-	err := repo.SaveMessage(&message)
-	if err != nil {
-		http.Error(w, "Failed to send message", http.StatusInternalServerError)
+	if requestBody.ReceiverID == 0 || requestBody.Content == "" {
+		http.Error(w, "Invalid receiver ID or content", http.StatusBadRequest)
 		return
 	}
 
+	db := config.GetDB()
+	repo := repositories.NewMessageRepository(db)
+
+	err := repo.SaveMessage(userID, requestBody.ReceiverID, requestBody.Content)
+	if err != nil {
+		log.Println("❌ Failed to save message:", err)
+		http.Error(w, "Failed to send message", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("📩 Sending message: Sender %d -> Receiver %d: %s", userID, requestBody.ReceiverID, requestBody.Content)
+
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Message sent successfully"})
 }
 
-// GetChatHistoryHandler retrieves chat history between two users
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	userID := middlewares.GetUserIDFromSession(r)
 	if userID == 0 {
@@ -72,21 +80,25 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	otherUserID, err := strconv.Atoi(r.URL.Query().Get("user_id"))
-	if err != nil || otherUserID == 0 {
+	receiverIDStr := r.URL.Query().Get("receiver_id")
+	log.Printf("📌 Extracted receiverID from request: %s", receiverIDStr)
+
+	receiverID, err := strconv.Atoi(receiverIDStr)
+	if err != nil || receiverID == 0 {
+		log.Println("❌ Invalid user ID:", receiverIDStr)
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 
 	db := config.GetDB()
-	repo := repositories.NewChatRepository(db)
+	repo := repositories.NewMessageRepository(db)
 
-	messages, err := repo.GetMessages(userID, otherUserID)
+	messages, err := repo.GetChatHistory(userID, receiverID)
 	if err != nil {
-		http.Error(w, "Failed to fetch chat history", http.StatusInternalServerError)
+		log.Println("❌ Error retrieving chat history:", err)
+		http.Error(w, "Failed to retrieve chat history", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(messages)
 }

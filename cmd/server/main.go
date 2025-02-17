@@ -64,9 +64,10 @@ func main() {
 	authRoutes.HandleFunc("/groups/members", handlers.GetGroupMembersHandler).Methods("GET")
 	authRoutes.HandleFunc("/groups/posts", handlers.CreateGroupPostHandler).Methods("POST")
 	authRoutes.HandleFunc("/groups/events", handlers.CreateGroupEventHandler).Methods("POST")
-	authRoutes.HandleFunc("/groups/events/rsvp", handlers.RSVPToEventHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/events/rsvp", handlers.RSVPEventHandler).Methods("POST")
 	authRoutes.HandleFunc("/groups/events/rsvp/count", handlers.GetRSVPCountHandler).Methods("GET")
-	
+	authRoutes.HandleFunc("/groups/events/create", handlers.CreateGroupEventHandler).Methods("POST")
+
 	// ✅ Group Membership
 	authRoutes.HandleFunc("/groups/join", handlers.RequestToJoinGroupHandler).Methods("POST") // ✅ Use only one join method
 	authRoutes.HandleFunc("/groups/approve", handlers.ApproveMembershipHandler).Methods("POST")
@@ -76,7 +77,6 @@ func main() {
 	// ✅ Notifications
 	authRoutes.HandleFunc("/notifications", handlers.GetNotificationsHandler).Methods("GET")
 
-	// ✅ Chat System
 	authRoutes.HandleFunc("/chat/send", handlers.SendMessageHandler).Methods("POST")
 	authRoutes.HandleFunc("/chat/history", handlers.GetChatHistoryHandler).Methods("GET")
 
