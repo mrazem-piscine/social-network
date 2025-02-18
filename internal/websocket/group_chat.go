@@ -2,7 +2,10 @@ package websocket
 
 import (
 	"log"
+	"strconv"
 	"sync"
+	"social-network/internal/config"
+	"social-network/internal/repositories"
 
 	"github.com/gorilla/websocket"
 )
@@ -72,29 +75,36 @@ func (gm *GroupChatManager) ListenForMessages(conn *websocket.Conn, groupID, use
 	}
 }
 
-// ✅ Send a Message to Everyone in the Group Except Sender
+// BroadcastGroupMessage sends a message to all users in a group chat and saves it
 func (gm *GroupChatManager) BroadcastGroupMessage(groupID, senderID int, content string) {
 	gm.Mutex.Lock()
 	defer gm.Mutex.Unlock()
 
+	// ✅ Save message in the database
+	db := config.GetDB()
+	repo := repositories.NewGroupChatRepository(db)
+	err := repo.SaveGroupChatMessage(groupID, senderID, content)
+	if err != nil {
+		log.Printf("❌ Failed to save message to database: %v", err)
+	}
+
+	// ✅ Send message to all users in the group chat
 	for userID, conn := range gm.GroupClients[groupID] {
-		if userID != senderID { // Don't send message to the sender
+		if userID != senderID {
 			conn.Mutex.Lock()
-			err := conn.Conn.WriteJSON(map[string]interface{}{
-				"type":      "group_message",
-				"sender_id": senderID,
+			err := conn.Conn.WriteJSON(map[string]string{
+				"sender_id": strconv.Itoa(senderID),
 				"content":   content,
 			})
 			conn.Mutex.Unlock()
 
 			if err != nil {
 				log.Printf("❌ Error sending group message to User %d: %v", userID, err)
-				conn.Conn.Close()
-				delete(gm.GroupClients[groupID], userID)
 			}
 		}
 	}
 }
+
 
 // ✅ Remove User From Group When They Disconnect
 func (gm *GroupChatManager) RemoveUserFromGroup(groupID, userID int) {
