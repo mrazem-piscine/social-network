@@ -75,6 +75,7 @@ func main() {
 	authRoutes.HandleFunc("/groups/approve", handlers.ApproveMembershipHandler).Methods("POST")
 	authRoutes.HandleFunc("/groups/reject", handlers.RejectMembershipHandler).Methods("POST")
 	authRoutes.HandleFunc("/groups/leave", handlers.LeaveGroupHandler).Methods("POST")
+	authRoutes.HandleFunc("/groups/chat/history", handlers.GetGroupChatHistoryHandler).Methods("GET")
 
 	// ✅ Notifications
 	authRoutes.HandleFunc("/notifications", handlers.GetNotificationsHandler).Methods("GET")

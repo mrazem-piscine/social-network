@@ -17,17 +17,17 @@ func NewGroupChatRepository(db *sql.DB) *GroupChatRepository {
 }
 
 func (repo *GroupChatRepository) SaveGroupChatMessage(groupID, senderID int, content string) error {
-	_, err := repo.DB.Exec(`
-        INSERT INTO group_chat_messages (group_id, sender_id, content) 
-        VALUES (?, ?, ?)`, 
-        groupID, senderID, content)
-	if err != nil {
-		log.Printf("❌ Error saving group chat message: %v", err)
+		db := config.GetDB()
+		_, err := db.Exec(`
+			INSERT INTO group_chat_messages (group_id, sender_id, content)
+			VALUES (?, ?, ?)`, groupID, senderID, content)
+	
+		if err != nil {
+			log.Println("❌ Error saving message:", err)
+		}
 		return err
 	}
-	log.Printf("✅ Group chat message saved: Group %d | Sender %d | Content: %s", groupID, senderID, content)
-	return nil
-}
+	
 
 
 // GetGroupMessages fetches chat history for a group
