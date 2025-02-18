@@ -16,18 +16,18 @@ func NewGroupChatRepository(db *sql.DB) *GroupChatRepository {
 	return &GroupChatRepository{DB: db}
 }
 
-// SaveGroupMessage stores a group chat message in the database
-func (repo *GroupChatRepository) SaveGroupMessage(message *models.GroupChatMessage) error {
+func (repo *GroupChatRepository) SaveGroupMessage(groupID, senderID int, content string) error {
 	_, err := repo.DB.Exec(`
 		INSERT INTO group_chat_messages (group_id, sender_id, content) 
-		VALUES (?, ?, ?)`,
-		message.GroupID, message.SenderID, message.Content)
+		VALUES (?, ?, ?)`, 
+		groupID, senderID, content)
 	if err != nil {
-		log.Println("Error saving group message:", err)
-		return err
+		log.Println("❌ Failed to store message:", err)
 	}
-	return nil
+	return err
 }
+
+
 
 // GetGroupMessages fetches chat history for a group
 func (repo *GroupChatRepository) GetGroupMessages(groupID int) ([]models.GroupChatMessage, error) {

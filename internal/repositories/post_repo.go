@@ -74,3 +74,30 @@ func (repo *PostRepository) EditPost(postID, userID int, content string, image *
 	)
 	return err
 }
+// GetAllPosts retrieves all posts from all users
+func (repo *PostRepository) GetAllPosts() ([]models.Post, error) {
+	var posts []models.Post
+
+	rows, err := repo.DB.Query(`
+		SELECT id, user_id, content, privacy, created_at FROM posts
+		ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var post models.Post
+		err := rows.Scan(&post.ID, &post.UserID, &post.Content, &post.Privacy, &post.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}

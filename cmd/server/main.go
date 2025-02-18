@@ -49,10 +49,12 @@ func main() {
 	authRoutes.HandleFunc("/comments/edit", handlers.EditCommentHandler).Methods("PUT")
 	authRoutes.HandleFunc("/comments", handlers.DeleteCommentHandler).Methods("DELETE")
 
+	authRoutes.HandleFunc("/all-posts", handlers.GetAllPostsHandler).Methods("GET")
 	authRoutes.HandleFunc("/user-posts", handlers.GetUserPostsHandler).Methods("GET")
 	authRoutes.HandleFunc("/posts", handlers.CreatePostHandler).Methods("POST")
 	authRoutes.HandleFunc("/posts/edit", handlers.EditPostHandler).Methods("PUT")
 	authRoutes.HandleFunc("/posts", handlers.DeletePostHandler).Methods("DELETE")
+
 	// Serve uploaded images
 
 	// ✅ Like System

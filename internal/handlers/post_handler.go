@@ -131,3 +131,18 @@ func EditPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Post updated successfully"})
 }
+// GetAllPostsHandler retrieves all posts from all users
+func GetAllPostsHandler(w http.ResponseWriter, r *http.Request) {
+	db := config.GetDB()
+	repo := repositories.NewPostRepository(db)
+
+	posts, err := repo.GetAllPosts()
+	if err != nil {
+		log.Println("❌ Error retrieving all posts:", err)
+		http.Error(w, "Failed to retrieve posts", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(posts)
+}
