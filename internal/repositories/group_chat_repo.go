@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"social-network/internal/models"
+	"social-network/internal/config"
 )
 
 // GroupChatRepository handles group chat-related database operations

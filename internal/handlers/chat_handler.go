@@ -26,6 +26,7 @@ func WebSocketChatHandler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := chatUpgrader.Upgrade(w, r, nil)
 	if err != nil {
+		log.Println("❌ Failed to upgrade WebSocket:", err)
 		http.Error(w, "Failed to upgrade WebSocket", http.StatusInternalServerError)
 		return
 	}
@@ -49,17 +50,19 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 		Content    string `json:"content"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		log.Println("❌ Failed to decode request body:", err)
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	if requestBody.ReceiverID == 0 || requestBody.Content == "" {
+		log.Println("❌ Invalid message request: missing receiver or content")
 		http.Error(w, "Invalid receiver ID or content", http.StatusBadRequest)
 		return
 	}
 
 	db := config.GetDB()
-	repo := repositories.NewMessageRepository(db)
+	repo := repositories.NewChatRepository(db) // ✅ FIXED function name
 
 	err := repo.SaveMessage(userID, requestBody.ReceiverID, requestBody.Content)
 	if err != nil {
@@ -67,12 +70,14 @@ func SendMessageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to send message", http.StatusInternalServerError)
 		return
 	}
+
 	log.Printf("📩 Sending message: Sender %d -> Receiver %d: %s", userID, requestBody.ReceiverID, requestBody.Content)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Message sent successfully"})
 }
 
+// GetChatHistoryHandler retrieves chat history between two users
 func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	userID := middlewares.GetUserIDFromSession(r)
 	if userID == 0 {
@@ -91,14 +96,15 @@ func GetChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db := config.GetDB()
-	repo := repositories.NewMessageRepository(db)
+	repo := repositories.NewChatRepository(db) // ✅ FIXED function name
 
-	messages, err := repo.GetChatHistory(userID, receiverID)
+	messages, err := repo.GetMessages(userID, receiverID) // ✅ FIXED function name
 	if err != nil {
 		log.Println("❌ Error retrieving chat history:", err)
 		http.Error(w, "Failed to retrieve chat history", http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("📜 Chat history retrieved between %d and %d", userID, receiverID)
 	json.NewEncoder(w).Encode(messages)
 }

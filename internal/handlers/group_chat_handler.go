@@ -5,13 +5,14 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"github.com/gorilla/websocket"
 
 	"social-network/internal/config"
 	"social-network/internal/middlewares"
 	"social-network/internal/models"
 	ws "social-network/internal/websocket" // ✅ Use alias "ws"
+	"github.com/gorilla/websocket"
 )
+
 
 
 // ✅ Create a Global Instance of GroupChatManager
@@ -97,4 +98,38 @@ func GetGroupChatHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
     w.WriteHeader(http.StatusOK)
     json.NewEncoder(w).Encode(messages)
+}
+func SendGroupChatMessageHandler(w http.ResponseWriter, r *http.Request) {
+	userID := middlewares.GetUserIDFromSession(r)
+	if userID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GroupID int    `json:"group_id"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GroupID == 0 || req.Content == "" {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	db := config.GetDB()
+	_, err := db.Exec("INSERT INTO group_chat_messages (group_id, sender_id, content) VALUES (?, ?, ?)",
+		req.GroupID, userID, req.Content)
+
+	if err != nil {
+		log.Println("❌ Failed to save group message:", err)
+		http.Error(w, "Failed to send message", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("📩 Group %d | User %d: %s", req.GroupID, userID, req.Content)
+
+	// ✅ Use the correct `groupChatManager`
+	groupChatManager.BroadcastGroupMessage(req.GroupID, userID, req.Content)
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Message sent successfully"})
 }
