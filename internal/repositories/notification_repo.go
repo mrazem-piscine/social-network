@@ -7,33 +7,29 @@ import (
 	"social-network/internal/models"
 )
 
-// NotificationRepository handles database operations for notifications
+// NotificationRepository handles database operations for notifications.
 type NotificationRepository struct {
 	DB *sql.DB
 }
 
-// NewNotificationRepository creates a new instance of NotificationRepository
+// NewNotificationRepository creates a new instance of NotificationRepository.
 func NewNotificationRepository(db *sql.DB) *NotificationRepository {
 	return &NotificationRepository{DB: db}
 }
 
-// ✅ Save a new notification in the database
-func (repo *NotificationRepository) CreateNotification(userID int, notifType, message string) error {
-	log.Printf("📌 Saving notification for User %d: %s", userID, message)
-
+// CreateNotification inserts a new notification into the database.
+func (repo *NotificationRepository) CreateNotification(userID int, notifType string, message string) error {
 	_, err := repo.DB.Exec(`
         INSERT INTO notifications (user_id, type, message, is_read, created_at) 
-        VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)`, userID, notifType, message)
+        VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)`,
+		userID, notifType, message)
 	if err != nil {
-		log.Printf("❌ Failed to save notification for User %d: %v", userID, err)
-		return err
+		log.Println("❌ Error inserting notification:", err)
 	}
-
-	log.Printf("✅ Notification saved for User %d", userID)
-	return nil
+	return err
 }
 
-// ✅ Get all notifications for a user
+// GetNotifications fetches all notifications for a user.
 func (repo *NotificationRepository) GetNotifications(userID int) ([]models.Notification, error) {
 	rows, err := repo.DB.Query(`
 		SELECT id, user_id, type, message, is_read, created_at 
@@ -59,7 +55,7 @@ func (repo *NotificationRepository) GetNotifications(userID int) ([]models.Notif
 	return notifications, nil
 }
 
-// ✅ Get unread notifications for a user
+// GetUnreadNotifications fetches unread notifications for a user.
 func (repo *NotificationRepository) GetUnreadNotifications(userID int) ([]models.Notification, error) {
 	rows, err := repo.DB.Query(`
 		SELECT id, user_id, type, message, is_read, created_at 
@@ -80,12 +76,11 @@ func (repo *NotificationRepository) GetUnreadNotifications(userID int) ([]models
 		}
 		notifications = append(notifications, notif)
 	}
-
 	log.Printf("📩 Retrieved %d unread notifications for User %d", len(notifications), userID)
 	return notifications, nil
 }
 
-// ✅ Mark all notifications as read for a user
+// MarkNotificationsAsRead marks all notifications as read for a user.
 func (repo *NotificationRepository) MarkNotificationsAsRead(userID int) error {
 	_, err := repo.DB.Exec(`
 		UPDATE notifications SET is_read = 1 WHERE user_id = ?`, userID)
@@ -93,7 +88,6 @@ func (repo *NotificationRepository) MarkNotificationsAsRead(userID int) error {
 		log.Printf("❌ Error marking notifications as read for User %d: %v", userID, err)
 		return err
 	}
-
 	log.Printf("✅ Marked all notifications as read for User %d", userID)
 	return nil
 }

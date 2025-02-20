@@ -93,6 +93,9 @@ func main() {
 
 	// ✅ Notifications
 	authRoutes.HandleFunc("/notifications", handlers.GetNotificationsHandler).Methods("GET")
+	authRoutes.HandleFunc("/notifications", handlers.GetNotificationsHandler).Methods("GET")
+	authRoutes.HandleFunc("/notifications/send", handlers.SendNotificationHandler).Methods("POST") // <== Add this!
+	// authRoutes.HandleFunc("/notifications/read", handlers.MarkNotificationsAsReadHandler).Methods("PUT")
 
 	// ✅ Private Chat
 	authRoutes.HandleFunc("/chat/send", handlers.SendMessageHandler).Methods("POST")
